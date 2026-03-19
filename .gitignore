@@ -1,0 +1,19 @@
+# Base de données
+challenge.db
+*.db
+
+# Sauvegardes
+backups/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Outils perso
+.claude/
+.qodo/
+
+# Logs
+*.log
