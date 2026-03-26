@@ -23,6 +23,8 @@ Application de gestion des classements pour les challenges de raids d'orientatio
 - Classement dynamique par circuit et catégorie
 - Calcul automatique des points selon le rang dans la catégorie
 - Export PDF par catégorie ou classement complet
+- Export PDF des statistiques globales (tous circuits réunis) : participants par course avec détail Hommes / Femmes / Mixtes
+- Vainqueurs affichés uniquement à l'issue des 7 courses (classement définitif)
 
 ### Maintenance & Qualité des données
 - **Détection des coureurs invalides** : noms vides ou mal formatés avec possibilité de correction ou suppression

@@ -843,17 +843,10 @@ def show_ranking():
             winners_set = set(
                 temp[temp["_total"] == max_per_cat][["nom_complet", "categorie"]].apply(tuple, axis=1)
             )
-        else:
-            # Mode provisoire : vainqueur = 4 premières places ou plus
-            wins = (
-                filtered_df[filtered_df["rang"] == 1]
-                .groupby(["nom_complet", "categorie"])
-                .size()
-            )
-            winners_set = set(wins[wins >= 4].index)
+        # Mode provisoire : aucun vainqueur affiché avant les 7 courses
 
     if winners_set:
-        label = "🏆 **VAINQUEURS DU CLASSEMENT FINAL**" if is_final else "🌟 **GRANDS VAINQUEURS DU CHALLENGE (4 victoires)**"
+        label = "🏆 **VAINQUEURS DU CLASSEMENT FINAL**"
         st.success(label)
         cols_w = st.columns(4)
         for i, (w_nom, w_cat) in enumerate(winners_set):
@@ -1123,7 +1116,7 @@ def show_ranking():
         else:
             st.info("Aucun participant à modifier dans cette vue.")
 
-    col_pdf_1, col_pdf_2 = st.columns(2)
+    col_pdf_1, col_pdf_2, col_pdf_3 = st.columns(3)
 
     with col_pdf_1:
         if pivot is not None:
@@ -1191,7 +1184,7 @@ def show_ranking():
                 p_cat = p_cat.sort_values(by="Total", ascending=False)
                 p_cat = p_cat.reset_index()
 
-                # Vainqueurs : rank 1 en mode final, sinon 4 victoires ou plus
+                # Vainqueurs : uniquement en mode final (7 courses disputées)
                 if is_final:
                     top_total = p_cat["Total"].max()
                     cat_winners_set = set(
@@ -1199,12 +1192,7 @@ def show_ranking():
                         .apply(tuple, axis=1)
                     )
                 else:
-                    cat_wins = (
-                        df_cat[df_cat["rang"] == 1]
-                        .groupby(["nom_complet", "categorie"])
-                        .size()
-                    )
-                    cat_winners_set = set(cat_wins[cat_wins >= 4].index)
+                    cat_winners_set = set()
 
                 def get_pdf_full_name(row):
                     base = row["nom_complet"] + " (" + row["categorie"] + ")"
@@ -1242,6 +1230,49 @@ def show_ranking():
             )
         else:
             st.info("Pas de données pour générer le PDF complet.")
+
+    with col_pdf_3:
+        # Collecte des stats pour les 3 circuits du challenge sélectionné
+        circuits_stats = {}
+        for circuit in ["trotteur", "orienteur", "raideur"]:
+            df_c = df_challenge[df_challenge["circuit"] == circuit]
+            if df_c.empty:
+                continue
+            unique_entries = df_c[["nom_complet", "categorie"]].drop_duplicates().copy()
+            unique_entries["cat_norm"] = unique_entries["categorie"].apply(normalize_category)
+            cat_counts = unique_entries["cat_norm"].value_counts()
+            total_u = df_c["nom_complet"].nunique()
+            circ_courses_raw = database.get_courses_by_circuit(circuit)
+            circ_courses = [c for c in circ_courses_raw if c[4] == selected_ch_id]
+            circ_courses.sort(key=lambda x: x[2])
+            course_stats = []
+            for c in circ_courses:
+                df_cc = df_c[df_c["nom_course"] == c[1]]
+                h = df_cc[df_cc["categorie"].apply(lambda x: check_category_match(x, "Homme"))]["nom_complet"].nunique()
+                f = df_cc[df_cc["categorie"].apply(lambda x: check_category_match(x, "Femme"))]["nom_complet"].nunique()
+                m = df_cc[df_cc["categorie"].apply(lambda x: check_category_match(x, "Mixte"))]["nom_complet"].nunique()
+                t = df_cc["nom_complet"].nunique()
+                course_stats.append((c[1], format_date_fr(c[2]), t, h, f, m))
+            circuits_stats[circuit] = {
+                "global": {
+                    "Total": total_u,
+                    "Hommes": int(cat_counts.get("Homme", 0)),
+                    "Femmes": int(cat_counts.get("Femme", 0)),
+                    "Mixtes": int(cat_counts.get("Mixte", 0)),
+                },
+                "courses": course_stats,
+            }
+
+        if circuits_stats:
+            stats_pdf_bytes = utils.generate_stats_pdf(circuits_stats, ch_map[selected_ch_id])
+            st.download_button(
+                "📊 Télécharger les statistiques",
+                stats_pdf_bytes,
+                "statistiques_challenge.pdf",
+                "application/pdf",
+            )
+        else:
+            st.info("Pas de données statistiques disponibles.")
 
 
 def show_edition():

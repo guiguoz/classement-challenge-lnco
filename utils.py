@@ -255,3 +255,112 @@ def generate_pdf(dfs_dict, is_final: bool = False):
             pdf.ln(row_h)
 
     return bytes(pdf.output())
+
+
+def generate_stats_pdf(circuits_stats: dict, challenge_name: str) -> bytes:
+    """
+    Génère un PDF de statistiques pour tous les circuits du challenge.
+    circuits_stats = {
+        "trotteur": {
+            "global": {"Total": int, "Hommes": int, "Femmes": int, "Mixtes": int},
+            "courses": [(nom, date, total, hommes, femmes, mixtes), ...]
+        },
+        ...
+    }
+    """
+    pdf = PDF()
+    pdf.alias_nb_pages()
+    pdf.set_auto_page_break(auto=True, margin=25)
+
+    def fit_text(txt: str, width: float) -> str:
+        s = str(txt)
+        s = s.encode("latin-1", "replace").decode("latin-1")
+        if pdf.get_string_width(s) <= width - 2:
+            return s
+        ell = "..."
+        while s and pdf.get_string_width(s + ell) > width - 2:
+            s = s[:-1]
+        return (s + ell) if s else ""
+
+    def draw_table(headers: list, rows: list, col_widths: list):
+        """Dessine un tableau avec en-têtes grisés et zébrage des lignes."""
+        row_h = 7
+        header_h = 8
+
+        # En-tête
+        pdf.set_fill_color(230, 230, 230)
+        pdf.set_font("Arial", "B", 9)
+        for i, h in enumerate(headers):
+            pdf.cell(col_widths[i], header_h, fit_text(h, col_widths[i]), border=1, ln=0, align="C", fill=True)
+        pdf.ln(header_h)
+
+        # Lignes
+        pdf.set_font("Arial", "", 9)
+        fill_toggle = False
+        for row in rows:
+            if pdf.get_y() > pdf.h - pdf.b_margin - row_h:
+                pdf.add_page(orientation="P")
+                pdf.set_fill_color(230, 230, 230)
+                pdf.set_font("Arial", "B", 9)
+                for i, h in enumerate(headers):
+                    pdf.cell(col_widths[i], header_h, fit_text(h, col_widths[i]), border=1, ln=0, align="C", fill=True)
+                pdf.ln(header_h)
+                pdf.set_font("Arial", "", 9)
+                fill_toggle = False
+            fill_toggle = not fill_toggle
+            pdf.set_fill_color(248, 248, 248) if fill_toggle else pdf.set_fill_color(255, 255, 255)
+            for i, val in enumerate(row):
+                align = "L" if i == 0 and len(headers) > 2 else "C"
+                pdf.cell(col_widths[i], row_h, fit_text(str(val), col_widths[i]), border=1, ln=0, align=align, fill=True)
+            pdf.ln(row_h)
+
+    circuit_labels = {"trotteur": "Trotteur", "orienteur": "Orienteur", "raideur": "Raideur"}
+
+    for circuit, data in circuits_stats.items():
+        pdf.header_circuit = circuit_labels.get(circuit, circuit.capitalize())
+        pdf.header_date = challenge_name
+        pdf.add_page(orientation="P")
+
+        page_w = pdf.w - pdf.l_margin - pdf.r_margin
+
+        # Titre de section
+        pdf.set_font("Arial", "B", 13)
+        pdf.set_text_color(44, 62, 80)
+        pdf.cell(0, 9, f"Statistiques - {circuit_labels.get(circuit, circuit.capitalize())}", 0, 1, "L")
+        pdf.set_font("Arial", "I", 9)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(0, 5, f"Challenge {challenge_name}", 0, 1, "L")
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(4)
+
+        # --- Tableau statistiques globales ---
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(0, 7, "Statistiques globales", 0, 1, "L")
+        pdf.ln(1)
+
+        g = data["global"]
+        glob_headers = ["Total Circuit", "Hommes", "Femmes", "Mixtes"]
+        glob_rows = [[g["Total"], g["Hommes"], g["Femmes"], g["Mixtes"]]]
+        w_col = page_w / 4
+        draw_table(glob_headers, glob_rows, [w_col] * 4)
+        pdf.ln(6)
+
+        # --- Tableau participants par course ---
+        if data["courses"]:
+            pdf.set_font("Arial", "B", 10)
+            pdf.cell(0, 7, "Participants par course", 0, 1, "L")
+            pdf.ln(1)
+
+            course_headers = ["Course", "Date", "Total", "Hommes", "Femmes", "Mixtes"]
+            w_course = page_w * 0.38
+            w_date = page_w * 0.14
+            w_stat = (page_w - w_course - w_date) / 4
+            course_widths = [w_course, w_date, w_stat, w_stat, w_stat, w_stat]
+
+            course_rows = [
+                [nom, date, total, hommes, femmes, mixtes]
+                for nom, date, total, hommes, femmes, mixtes in data["courses"]
+            ]
+            draw_table(course_headers, course_rows, course_widths)
+
+    return bytes(pdf.output())
