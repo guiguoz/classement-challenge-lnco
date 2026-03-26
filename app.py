@@ -14,6 +14,10 @@ import re
 
 st.set_page_config(page_title="Challenge Raids Orientation", layout="wide")
 
+# Paramètres du challenge
+NB_COURSES_MAX = 7   # Nombre de courses pour qu'un circuit soit considéré comme terminé
+NB_BEST_RESULTS = 4  # Nombre de meilleurs résultats retenus pour le classement final
+
 database.init_db()
 
 
@@ -793,9 +797,25 @@ def show_ranking():
     # Mapping nom_course -> date pour affichage
     course_dates = {c[1]: format_date_fr(c[2]) for c in challenge_courses}
 
+    # Détection du mode final
+    nb_courses = len(challenge_courses)
+    is_final = nb_courses >= NB_COURSES_MAX
+
     if df_circuit_all.empty:
         st.info(f"Aucun résultat pour le circuit {choix_circuit} sur ce challenge.")
         return
+
+    # Bannière mode final / provisoire
+    if is_final:
+        st.success(
+            f"🏆 **Classement Final** — {NB_BEST_RESULTS} meilleurs résultats retenus sur {nb_courses} courses"
+        )
+    else:
+        remaining = NB_COURSES_MAX - nb_courses
+        st.info(
+            f"⏳ **Classement Provisoire** — {nb_courses}/{NB_COURSES_MAX} courses disputées · "
+            f"encore {remaining} course{'s' if remaining > 1 else ''} avant le classement définitif"
+        )
 
     # Filtrage pour l'affichage (selon sélection catégorie)
     filtered_df = df_circuit_all.copy()
@@ -864,7 +884,12 @@ def show_ranking():
                 new_columns[col] = col  # type: ignore
         pivot = pivot.rename(columns=new_columns)
 
-        pivot["Total"] = pivot.sum(axis=1)
+        if is_final:
+            pivot["Total"] = pivot.apply(
+                lambda row: row.nlargest(NB_BEST_RESULTS).sum(), axis=1
+            )
+        else:
+            pivot["Total"] = pivot.sum(axis=1)
         pivot = pivot.sort_values(by="Total", ascending=False)
         pivot = pivot.reset_index()
 
@@ -1097,7 +1122,7 @@ def show_ranking():
                 titre_simple += f" - {choix_categorie}"
 
             pdf_input = {titre_simple: (pdf_pivot, ch_map[selected_ch_id])}
-            pdf_bytes = utils.generate_pdf(pdf_input)
+            pdf_bytes = utils.generate_pdf(pdf_input, is_final=is_final)
             st.download_button(
                 "📄 Télécharger la catégorie affichée",
                 pdf_bytes,
@@ -1180,7 +1205,7 @@ def show_ranking():
                 pdf_input_full[title_cat] = (p_cat, range_str)
 
         if pdf_input_full:
-            pdf_bytes_full = utils.generate_pdf(pdf_input_full)
+            pdf_bytes_full = utils.generate_pdf(pdf_input_full, is_final=is_final)
             st.download_button(
                 "📄 Télécharger le circuit complet",
                 pdf_bytes_full,

@@ -88,7 +88,7 @@ class PDF(FPDF):
         self.set_text_color(0, 0, 0)
 
 
-def generate_pdf(dfs_dict):
+def generate_pdf(dfs_dict, is_final: bool = False):
     """
     Génère un PDF mis en page proprement (paysage si nécessaire), avec:
     - en-têtes de tableau grisés
@@ -96,6 +96,7 @@ def generate_pdf(dfs_dict):
     - zébrage des lignes
     - troncature élégante du texte pour éviter les débordements
     dfs_dict = { "Titre de la section": dataframe }
+    is_final: si True, affiche la mention "Classement Final - 4 meilleurs resultats"
     """
     pdf = PDF()
     pdf.alias_nb_pages()
@@ -128,6 +129,11 @@ def generate_pdf(dfs_dict):
         # Titre de section
         pdf.set_font("Arial", "B", 12)
         pdf.cell(0, 8, title, 0, 1, "L")
+        if is_final:
+            pdf.set_font("Arial", "I", 9)
+            pdf.set_text_color(0, 128, 0)
+            pdf.cell(0, 5, "Classement Final - 4 meilleurs resultats retenus", 0, 1, "L")
+            pdf.set_text_color(0, 0, 0)
         pdf.ln(1)
 
         # Calcul des largeurs de colonnes
