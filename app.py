@@ -826,19 +826,35 @@ def show_ranking():
             )
         ]
 
-    # --- GESTION DES VAINQUEURS (4 victoires ou plus) ---
+    # --- GESTION DES VAINQUEURS ---
     winners_set = set()
     if not filtered_df.empty:
-        # Compter le nombre de fois où le rang est 1 pour chaque coureur/catégorie
-        wins = (
-            filtered_df[filtered_df["rang"] == 1]
-            .groupby(["nom_complet", "categorie"])
-            .size()
-        )
-        winners_set = set(wins[wins >= 4].index)
+        if is_final:
+            # Mode final : vainqueur = meilleur total (4 meilleures courses) PAR catégorie
+            temp = filtered_df.pivot_table(
+                index=["nom_complet", "categorie"],
+                columns="nom_course", values="points",
+                aggfunc="sum", fill_value=0,
+            )
+            temp["_total"] = temp.apply(lambda row: row.nlargest(NB_BEST_RESULTS).sum(), axis=1)
+            temp = temp.reset_index()
+            # transform("max") pour inclure tous les ex-æquo
+            max_per_cat = temp.groupby("categorie")["_total"].transform("max")
+            winners_set = set(
+                temp[temp["_total"] == max_per_cat][["nom_complet", "categorie"]].apply(tuple, axis=1)
+            )
+        else:
+            # Mode provisoire : vainqueur = 4 premières places ou plus
+            wins = (
+                filtered_df[filtered_df["rang"] == 1]
+                .groupby(["nom_complet", "categorie"])
+                .size()
+            )
+            winners_set = set(wins[wins >= 4].index)
 
     if winners_set:
-        st.success(f"🌟 **GRANDS VAINQUEURS DU CHALLENGE (4 victoires)**")
+        label = "🏆 **VAINQUEURS DU CLASSEMENT FINAL**" if is_final else "🌟 **GRANDS VAINQUEURS DU CHALLENGE (4 victoires)**"
+        st.success(label)
         cols_w = st.columns(4)
         for i, (w_nom, w_cat) in enumerate(winners_set):
             with cols_w[i % 4]:
