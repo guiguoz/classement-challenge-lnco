@@ -1166,17 +1166,29 @@ def show_ranking():
                     else:
                         new_columns_pdf[col] = col  # type: ignore
                 p_cat = p_cat.rename(columns=new_columns_pdf)
-                p_cat["Total"] = p_cat.sum(axis=1)
+                if is_final:
+                    p_cat["Total"] = p_cat.apply(
+                        lambda row: row.nlargest(NB_BEST_RESULTS).sum(), axis=1
+                    )
+                else:
+                    p_cat["Total"] = p_cat.sum(axis=1)
                 p_cat = p_cat.sort_values(by="Total", ascending=False)
                 p_cat = p_cat.reset_index()
 
-                # Calcul des vainqueurs spécifique à cette catégorie pour le PDF complet
-                cat_wins = (
-                    df_cat[df_cat["rang"] == 1]
-                    .groupby(["nom_complet", "categorie"])
-                    .size()
-                )
-                cat_winners_set = set(cat_wins[cat_wins >= 4].index)
+                # Vainqueurs : rank 1 en mode final, sinon 4 victoires ou plus
+                if is_final:
+                    top_total = p_cat["Total"].max()
+                    cat_winners_set = set(
+                        p_cat[p_cat["Total"] == top_total][["nom_complet", "categorie"]]
+                        .apply(tuple, axis=1)
+                    )
+                else:
+                    cat_wins = (
+                        df_cat[df_cat["rang"] == 1]
+                        .groupby(["nom_complet", "categorie"])
+                        .size()
+                    )
+                    cat_winners_set = set(cat_wins[cat_wins >= 4].index)
 
                 def get_pdf_full_name(row):
                     base = row["nom_complet"] + " (" + row["categorie"] + ")"
